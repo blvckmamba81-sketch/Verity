@@ -55,7 +55,7 @@ const ESCROW_REF_MAX_LENGTH = 128;
  * window shown here are the ones EscrowGate will actually apply. */
 export function NewSubmissionForm({ config }: { config: GateConfig }) {
   const router = useRouter();
-  const { account, connecting, networkOk, problem, login, reportWrongNetwork } = useWallet();
+  const { status, account, connecting, networkOk, problem, login, reportWrongNetwork } = useWallet();
   const taskTypeId = useId();
   const asset = resolveBondAsset(config.bond_asset);
   // One key for this form: retrying after a declined signature reuses the
@@ -64,7 +64,7 @@ export function NewSubmissionForm({ config }: { config: GateConfig }) {
 
   const maxArtifactBytes = Math.min(
     config.artifact_max_bytes ?? MAX_UPLOAD_ARTIFACT_BYTES,
-    MAX_UPLOAD_ARTIFACT_BYTES
+    MAX_UPLOAD_ARTIFACT_BYTES,
   );
 
   const [escrowRef, setEscrowRef] = useState("");
@@ -205,7 +205,7 @@ export function NewSubmissionForm({ config }: { config: GateConfig }) {
         setStep("idle");
         return;
       }
-      setError(err instanceof Error ? mapTrustlineError(err, asset.symbol) : "Submission failed.");
+      setError(err instanceof Error ? err.message : "Submission failed.");
       setStep("error");
     }
   }
@@ -217,6 +217,16 @@ export function NewSubmissionForm({ config }: { config: GateConfig }) {
       : wrongNetworkMessage()
     : null;
   const displayError = wrongNetworkNotice ?? error;
+
+  // Neutral, inert placeholder while /api/session is being checked. Before the
+  // session is known we must not offer "Connect wallet" (which would start a
+  // sign-in nobody needs) or show a stale account.
+  const sessionPlaceholder =
+    status === "restoring" ? (
+      <Button variant="secondary" disabled>
+        Checking session...
+      </Button>
+    ) : null;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -276,8 +286,7 @@ export function NewSubmissionForm({ config }: { config: GateConfig }) {
                       className={cn(
                         "px-2.5 py-1 text-xs",
                         isWrong && "border-status-slashed/40 text-status-slashed hover:bg-status-slashed/10",
-                        selected && !isWrong && "border-accent text-accent",
-                        selected && isWrong && "border-status-slashed bg-status-slashed/10"
+                        selected && "border-accent bg-accent/10 text-accent"
                       )}
                     >
                       {example.label}
@@ -289,28 +298,12 @@ export function NewSubmissionForm({ config }: { config: GateConfig }) {
             <select
               id={taskTypeId}
               value={taskType}
-              onChange={(e) => {
-                setTaskType(e.target.value as TaskType);
-                setActiveExample(null);
-              }}
-              className={inputClass}
+              onChange={(e) => setTaskType(e.target.value as TaskType)}
+              className={cn(inputClass, "appearance-none")}
             >
               <option value="deterministic">Deterministic (replay-verified)</option>
               <option value="retrieval">Retrieval (spot-checked)</option>
             </select>
-            {filledExample && (
-              <p
-                role="status"
-                className={cn(
-                  "rounded-lg border px-3 py-2 text-xs",
-                  filledExample.expectedOutcome === "slashed"
-                    ? "border-status-slashed/40 bg-status-slashed/10 text-status-slashed"
-                    : "border-border-subtle bg-surface text-text-secondary"
-                )}
-              >
-                {filledExample.note}
-              </p>
-            )}
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -349,9 +342,6 @@ export function NewSubmissionForm({ config }: { config: GateConfig }) {
               )}
             </Field>
           </div>
-          {asset.symbol !== "XLM" && (
-            <p className="text-xs text-text-tertiary">{trustlineNote(asset.symbol)}</p>
-          )}
         </CardBody>
       </Card>
 
@@ -364,8 +354,8 @@ export function NewSubmissionForm({ config }: { config: GateConfig }) {
             label={taskType === "retrieval" ? "Request spec (JSON)" : "Input (JSON)"}
             helper={
               taskType === "retrieval"
-                ? `The public URL you fetched, plus an optional JSON pointer to the value you extracted (up to ${formatKb(maxArtifactBytes)}). A sampled re-executor re-fetches it.`
-                : `Passed to your function as \`input\` (up to ${formatKb(maxArtifactBytes)}).`
+                ? "The public URL you fetched, plus an optional JSON pointer to the value you extracted. A sampled re-executor re-fetches it."
+                : "Passed to your function as `input`."
             }
           >
             {(control) => (
@@ -440,7 +430,7 @@ export function NewSubmissionForm({ config }: { config: GateConfig }) {
         </p>
       )}
 
-      {account ? (
+      {sessionPlaceholder ?? (account ? (
         <Button onClick={handleSubmit} disabled={busy || !networkOk || !escrowRefTrimmed || !inputContent || !outputContent}>
           {step === "checking"
             ? "Checking Freighter..."
@@ -460,7 +450,7 @@ export function NewSubmissionForm({ config }: { config: GateConfig }) {
         <Button onClick={login} disabled={connecting}>
           {connecting ? "Connecting..." : "Connect wallet to continue"}
         </Button>
-      )}
+      ))}
     </div>
   );
 }

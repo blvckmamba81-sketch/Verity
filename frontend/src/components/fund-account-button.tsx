@@ -10,7 +10,7 @@ import type { BondAsset } from "../lib/types";
  * non-native bond deployment, Friendbot only covers XLM transaction fees;
  * bonds and stakes require a trustline and balance in the bond asset. */
 export function FundAccountButton({ bondAsset }: { bondAsset?: Pick<BondAsset, "symbol"> }) {
-  const { account, connecting, login } = useWallet();
+  const { status, account, connecting, login } = useWallet();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const symbol = bondAsset?.symbol ?? "XLM";
@@ -27,6 +27,14 @@ export function FundAccountButton({ bondAsset }: { bondAsset?: Pick<BondAsset, "
     } finally {
       setBusy(false);
     }
+  }
+
+  if (status === "restoring") {
+    return (
+      <Button variant="secondary" disabled>
+        Checking session...
+      </Button>
+    );
   }
 
   if (!account) {

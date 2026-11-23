@@ -21,9 +21,9 @@ const LINKS = [
 
 export function Nav() {
   const pathname = usePathname();
-  const { account, connecting, networkOk, problem, login, logout, dismissProblem } = useWallet();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { status, account, connecting, networkOk, problem, login, logout, dismissProblem } = useWallet();
   const persistentProblem = problem?.code === "wrong-network" && !networkOk;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-20 border-b border-border-subtle bg-surface/90 backdrop-blur">
@@ -60,7 +60,13 @@ export function Nav() {
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <ThemeToggle />
-          {account ? (
+          {status === "restoring" ? (
+            // Neutral and inert: the session is still being checked, so offering
+            // "Connect wallet" here would start a sign-in nobody needs.
+            <Button variant="secondary" disabled>
+              Checking session...
+            </Button>
+          ) : account ? (
             <div className="flex items-center gap-2">
               <span className="hidden font-mono text-xs text-text-secondary sm:inline">
                 {truncateMiddle(account, 4, 4)}
@@ -137,14 +143,14 @@ export function Nav() {
                 </a>
               )}
             </p>
-            {!persistentProblem && (
+                        {!persistentProblem && (
               <button
                 type="button"
                 onClick={dismissProblem}
                 aria-label="Dismiss"
                 className="shrink-0 rounded-md p-1 text-text-tertiary transition-colors hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent"
               >
-                <X size={16} />
+              <X size={16} />
               </button>
             )}
           </div>

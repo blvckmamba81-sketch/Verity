@@ -16,11 +16,11 @@ type Status = "idle" | "checking" | "building" | "signing" | "relaying" | "done"
 /** `config` is the contract's live rule set: the stake floor, the slash
  * rate, and whether voting needs the admin's approval. */
 export function RegisterReexecutorForm({ config }: { config: GateConfig }) {
-  const { account, connecting, networkOk, problem, login, reportWrongNetwork } = useWallet();
+  const { status: sessionStatus, account, connecting, networkOk, problem, login, reportWrongNetwork } = useWallet();
   const asset = resolveBondAsset(config.bond_asset);
   // Twice the floor by default: a single slash then leaves the account active.
   const [stakeInput, setStakeInput] = useState(
-    formatUnits((BigInt(config.min_stake_floor) * BigInt(2)).toString(), asset.decimals)
+    formatUnits((BigInt(config.min_stake_floor) * BigInt(2)).toString(), asset.decimals),
   );
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +31,7 @@ export function RegisterReexecutorForm({ config }: { config: GateConfig }) {
   const floorFormatted = formatUnits(config.min_stake_floor, asset.decimals, asset.symbol);
   const stake = parseUnits(stakeInput, asset.decimals);
   const belowFloor = stake !== null && stake < floor;
+
   const wrongNetworkNotice = !networkOk
     ? problem?.code === "wrong-network"
       ? problem.message
@@ -142,7 +143,7 @@ pnpm --filter @verity/reexecutor-agent start`;
               </p>
               <p className="max-w-prose text-text-secondary">
                 {result.stake < floor
-                  ? `This is below the ${floorFormatted} floor, so the account is not yet eligible for work. Stake more to reach it.`
+                  ? `This is below the ${floorFormatted} floor, so the account is now eligible for work. Stake more to reach it.`
                   : config.reexecutor_allowlist
                     ? "Your account is now pending approval by the deployment admin. Start your worker; it will begin receiving assignments as soon as you are approved."
                     : "Your account is eligible. Start your worker and it will begin receiving assignments."}
@@ -191,8 +192,18 @@ pnpm --filter @verity/reexecutor-agent start`;
                 </p>
               )}
 
-              {account ? (
-                <Button onClick={handleRegister} disabled={(status !== "idle" && status !== "error") || !networkOk}>
+              {/* Neutral, inert placeholder while /api/session is being checked.
+               * Before the session is known we must not offer "Connect wallet"
+               * (which would start a sign-in nobody needs) or show a stale account. */}
+              {sessionStatus === "restoring" ? (
+                <Button variant="secondary" disabled>
+                  Checking session...
+                </Button>
+              ) : account ? (
+                <Button
+                  onClick={handleRegister}
+                  disabled={(status !== "idle" && status !== "error") || !networkOk}
+                >
                   {status === "checking"
                     ? "Checking Freighter..."
                     : status === "building"

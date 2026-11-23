@@ -34,7 +34,7 @@ export function OpenChallengeButton({
   bondAsset?: BondAsset | "native";
 }) {
   const router = useRouter();
-  const { account, connecting, networkOk, problem, login, reportWrongNetwork } = useWallet();
+  const { status, account, connecting, networkOk, problem, login, reportWrongNetwork } = useWallet();
   const asset = resolveBondAsset(bondAsset);
   // Keep null until the visitor edits the field so a later refresh filling in
   // minBondStroops populates the default without overwriting user input.
@@ -92,8 +92,19 @@ export function OpenChallengeButton({
     };
   }, [txHash, router]);
 
+  // Neutral, inert placeholder while /api/session is being checked. Before the
+  // session is known we must not offer "Connect wallet" (which would start a
+  // sign-in nobody needs) or show a stale account.
+  if (status === "restoring") {
+    return (
+      <Button variant="secondary" disabled>
+        Checking session...
+      </Button>
+    );
+  }
+
   async function handleChallenge() {
-    if (!account || !networkOk) return;
+    if (!account) return;
     setError(null);
     const bond = parseUnits(bondInput, asset.decimals);
     if (bond === null) {
@@ -125,30 +136,10 @@ export function OpenChallengeButton({
         reportWrongNetwork(err.message);
         return;
       }
-      setError(err instanceof Error ? mapTrustlineError(err, asset.symbol) : "The challenge could not be opened.");
+      setError(err instanceof Error ? err.message : "The challenge could not be opened.");
     } finally {
       setBusy(null);
     }
-  }
-
-  if (txHash) {
-    return (
-      <div className="space-y-2 text-sm" role="status">
-        <p>
-          {stalled
-            ? "Still waiting for the indexer to record the challenge. Reload the page later, or check the transaction on stellar.expert."
-            : "Challenge transaction confirmed on testnet. Waiting for the indexer to record it…"}
-        </p>
-        <a
-          href={TESTNET_EXPLORER_TX(txHash)}
-          target="_blank"
-          rel="noreferrer"
-          className="text-accent underline-offset-2 hover:underline"
-        >
-          View transaction on stellar.expert
-        </a>
-      </div>
-    );
   }
 
   if (windowState === "unknown") {
@@ -177,6 +168,26 @@ export function OpenChallengeButton({
     );
   }
 
+  if (txHash) {
+    return (
+      <div className="space-y-2 text-sm" role="status">
+        <p>
+          {stalled
+            ? "Still waiting for the indexer to record the challenge. Reload the page later, or check the transaction on stellar.expert."
+            : "Challenge transaction confirmed on testnet. Waiting for the indexer to record it…"}
+        </p>
+        <a
+          href={TESTNET_EXPLORER_TX(txHash)}
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent underline-offset-2 hover:underline"
+        >
+          View transaction on stellar.expert
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <p className="max-w-prose text-sm text-text-secondary">
@@ -198,7 +209,7 @@ export function OpenChallengeButton({
             className="w-36 rounded-lg border border-border-strong bg-surface px-3 py-2 font-mono text-sm outline-none focus:border-accent"
           />
         </div>
-        <Button variant="danger" onClick={handleChallenge} disabled={busy !== null || !networkOk}>
+        <Button variant="danger" onClick={handleChallenge} disabled={busy !== null}>
           {busy === "checking"
             ? "Checking Freighter..."
             : busy === "building"
